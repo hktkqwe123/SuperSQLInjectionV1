@@ -8,9 +8,8 @@ namespace SuperSQLInjection.model
     public enum InjectType
     {
         UnKnow = 0,
-        Bool=1,
+        Blind= 1,
         Error=2,
-        Union = 3,
-        Sleep=4
+        Union = 3
     }
 }

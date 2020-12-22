@@ -18,19 +18,23 @@ namespace SuperSQLInjection.model
         public String pname = "";//当前注入参数
         public String testPayload = "";//注入测试payload
         public int port = 80;
-        public int maxTime = 10;//延时注入判断阀值
+        public int maxTime = 5     ;//延时注入判断阀值
         public InjectType injectType=new InjectType();
         public DBType dbType = new DBType();
         public int timeOut = 10;//秒
         public int threadSize = 1;
         public int reTry = 2;
         public String encoding = "UTF-8";
+        public String cmd_encoding = "UTF-8";
         public String request = "";
         public String sencondRequest = "";
         public String key = "";
-        public String db_encoding = "";
+        public int injectHTTPCode = 0;//注入逻辑为真的时候页面的状态码
+        public String db_encoding = "UTF-8";
         public Boolean useCode = false;
         public int columnsCount = 0;
+
+        public String unionFillTemplate = "";//DB2填充模板
 
         public Boolean sencondInject = false;//二次注入
         public int showColumn = 0;
@@ -71,11 +75,17 @@ namespace SuperSQLInjection.model
         public Boolean useBetweenByPass = false;//between绕过
         public Boolean usehex = false;//hex绕过
         public Boolean useUnicode = false;//uniocde绕过
-
+        public String retryKey = "";//重新发包的关键字
         //scan
         public int level = 0;
         public int linkCount = 1;
         public int maxSpiderCount=10;
         public int maxScanCount = 10;
+
+        //proxy
+        public int proxy_mode = 0;//0关闭代理，1随机代理，2固定代理
+        public String proxy_check_host = "www.baidu.com";
+        public int proxy_check_port = 80;
+        public String proxy_check_Keys = "百度一下，你就知道";
     }
 }

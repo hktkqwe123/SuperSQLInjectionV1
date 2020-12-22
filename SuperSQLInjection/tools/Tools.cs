@@ -14,12 +14,18 @@ using System.Windows.Forms;
 using SuperSQLInjection.model;
 using SuperSQLInjection;
 using SuperSQLInjection.tools;
+using Microsoft.Win32;
+using System.Net.NetworkInformation;
+using System.Management;
 
 namespace tools
 {
     class Tools
     {
         public const String httpLogPath = "logs/http/";
+
+        //由于计数器有误差（可能客户端计数小于服务端，，如果页面正常响应时间非常快，可能导致返回时间可能提前，所以考虑设置一个误差值）
+        public const int deviation = 20;
 
         public static long currentMillis()
         {
@@ -47,13 +53,35 @@ namespace tools
         {
             FileTool.AppendLogToFile("logs/" + DateTime.Now.ToLongDateString() + ".log.txt", log + "----" + DateTime.Now);
         }
-
+        
+        /// <summary>
+        /// 随机生成小写字母
+        /// </summary>
+        /// <param name="len"></param>
+        /// <returns></returns>
         public static String RandStr(int len)
         {
             StringBuilder str = new StringBuilder();
             Random rd = new Random();
             for (int i=0;i<len;i++) {
-                char c=(char)rd.Next(65, 91);
+                char c=(char)rd.Next(97, 122);
+                str.Append(c);
+            }
+            return str.ToString();
+        }
+
+        /// <summary>
+        /// 随机生成小写字母
+        /// </summary>
+        /// <param name="len"></param>
+        /// <returns></returns>
+        public static String RandNum(int len)
+        {
+            StringBuilder str = new StringBuilder();
+            Random rd = new Random();
+            for (int i = 0; i < len; i++)
+            {
+                char c = (char)rd.Next(49, 58);
                 str.Append(c);
             }
             return str.ToString();
@@ -271,12 +299,25 @@ namespace tools
         /// <returns></returns>
         public static String convertToString(String[] strs){
 
+            return convertToString(strs,false);
+
+
+        }
+
+       
+        public static String convertToString(String[] strs,bool appendNewLine)
+        {
+           
             StringBuilder sb = new StringBuilder();
-            foreach(String s in strs){
+            foreach (String s in strs)
+            {
                 sb.Append(s);
+                if (appendNewLine) {
+                    sb.Append("\r\n");
+                }  
             }
             return sb.ToString();
-        
+
         }
 
         /// <summary>
@@ -292,7 +333,7 @@ namespace tools
                 return int.Parse(str);
             }
             catch (Exception e) {
-                Tools.SysLog("info:-"+e.Message);
+                Tools.SysLog("info:数字转换错误:-"+e.Message);
             }
             return 0;
 
@@ -308,7 +349,7 @@ namespace tools
             {
                 return Convert.ToInt32(str,16);
             }
-            catch (Exception e)
+            catch
             {
                 
             }
@@ -379,7 +420,7 @@ namespace tools
         /// <param name="isUseCode">是否使用状态码判断</param>
         /// <param name="key">关键字</param>
         /// <returns></returns>
-        public static Boolean isTrue(ServerInfo server,String key,Boolean reverKey,KeyType keyType)
+        public static Boolean isTrue(ServerInfo server,String key,Boolean reverKey,KeyType keyType,int trueHTTPCode)
         {
             switch (keyType) {
                
@@ -388,17 +429,30 @@ namespace tools
                     //用关键字判断
                     if (server.body.Length > 0 && server.body.IndexOf(key)!=-1)
                     {
-                        ;
                         if (reverKey)
-                        {
-                            return false;
+                        {                    
+                                return false;
                         }
-                        return true;
+                        else
+                        {
+                            //判断httpcode是否一致
+                            if (trueHTTPCode != 0 && server.code == trueHTTPCode) {
+                                return true;
+                            }
+                            return false;
+                               
+                        }
+                       
                     }
                     else
                     {
                         if (reverKey)
                         {
+                            //判断httpcode是否一致
+                            if (trueHTTPCode != 0 && server.code == trueHTTPCode)
+                            {
+                                return true;
+                            }
                             return true;
                         }
                         return false;
@@ -409,7 +463,6 @@ namespace tools
                     //用正则判断
                     if (server.body.Length > 0 && Regex.IsMatch(server.body, key))
                     {
-                        ;
                         if (reverKey)
                         {
                             return false;
@@ -445,8 +498,9 @@ namespace tools
                 
 
                 case KeyType.Time:
+                    //由于计数器有误差（可能客户端计数小于服务端，如果页面正常响应时间非常快，可能导致返回时间可能提前，所以考虑设置一个误差值）
                     int time = Tools.convertToInt(key);
-                    if (server.runTime > time*1000)
+                    if (server.runTime > (time*1000-(time*deviation)))
                     {
                         if (reverKey)
                         {
@@ -541,9 +595,141 @@ namespace tools
             }
             catch (Exception e)
             {
-                Tools.SysLog("hex转换错误，传递str:" + str + ",encode:" + encode + "！错误消息：" + e.Message);
+                Tools.SysLog("hex转换错误！"+ e.Message);
             }
             return "";
+        }
+
+        /// <summary>
+        /// byte[]转hex，udf调用
+        /// </summary>
+        /// <param name="bytes"></param>
+        /// <returns></returns>
+        public static String bytesToHex(byte[] bytes)
+        {
+            try
+            {
+                StringBuilder sb = new StringBuilder();
+                if (bytes != null && bytes.Length > 0) {
+                    foreach (Byte s in bytes)
+                    {
+                        sb.Append(s.ToString("x").PadLeft(2, '0'));
+                    }
+                   
+                }
+                return sb.ToString();
+            }
+            catch (Exception e)
+            {
+                Tools.SysLog("bytesToHex转换错误！" + e.Message);
+            }
+            return "";
+        }
+
+        /// <summary>
+        /// byte[]转hex，udf调用
+        /// </summary>
+        /// <param name="bytes"></param>
+        /// <returns></returns>
+        public static String FileToHex(String path,Encoding encode)
+        {
+            try
+            {
+                byte[] filedata=FileTool.readFileToByte(path, encode);
+                return bytesToHex(filedata);
+            }
+            catch (Exception e)
+            {
+                Tools.SysLog("FileToHex转换错误！" + e.Message);
+            }
+            return "";
+        }
+
+        /// <summary>
+        /// 转换chr供postgresql替换库名，防止单引号被拦截或过滤
+        /// </summary>
+        /// <param name="str"></param>
+        /// <param name="encode"></param>
+        /// <returns></returns>
+        public static String strToChr(String str, String encode)
+        {
+            return strToChrOrChar(str, "chr", "||", encode);
+        }
+
+       
+        public static String strToChrOrChar(String str, String charFunction,String charConcatStr,String encode)
+        {
+            try
+            {
+
+                StringBuilder sb = new StringBuilder();
+                Byte[] strByte = Encoding.GetEncoding(encode).GetBytes(str);
+                foreach (Byte s in strByte)
+                {
+                    sb.Append(charFunction+"(" + s + ")"+ charConcatStr);
+                }
+                return sb.Remove(sb.Length - charConcatStr.Length, charConcatStr.Length).ToString();
+            }
+            catch (Exception e)
+            {
+                Tools.SysLog("strToChrOrChar错误！" + e.Message);
+            }
+            return "";
+        }
+
+        
+        public static String chrOrCharToStr(String str, String charFunction, String encode)
+        {
+            try
+            {
+                String[] chars = str.Split(' ');
+                if (chars.Length > 0) {
+
+                    Byte[] bs = new Byte[chars.Length];
+                    int index = 0;
+                    foreach (String s in chars)
+                    {
+                        String cs = s.Replace(charFunction,"").Replace(charFunction + "(", "").Replace(charFunction + ")", "");
+                        Byte b = (Byte)Tools.convertToInt(cs);
+                        bs[index] = b;
+                        index++;
+                    }
+                    return Encoding.GetEncoding(encode).GetString(bs);
+                   
+                }
+                    
+            }
+            catch (Exception e)
+            {
+                Tools.SysLog("strToChrOrChar错误！" + e.Message);
+            }
+            return "";
+        }
+
+
+        public static String strToChar(String str,String encode,String joinStr)
+        {
+            return strToChrOrChar(str, "char", joinStr, encode);
+        }
+
+        public static String strToChr(String str, String encode, String joinStr)
+        {
+            return strToChrOrChar(str, "chr", joinStr, encode);
+        }
+        public static String informixStrToChr(String randstr)
+        {
+            return "to_char("+ randstr + ")";
+        }
+
+        /// <summary>
+        /// 转换chr供SQLServer替换库名，防止单引号被拦截或过滤
+        /// </summary>
+        /// <param name="str"></param>
+        /// <param name="encode"></param>
+        /// <returns></returns>
+        public static String strToChar(String str, String encode)
+        {
+            return strToChrOrChar(str, "char", "+", encode);
         }
         public static int UnicodeInt2UTF8Int(int UnicodeInt)
         {
@@ -657,6 +843,21 @@ namespace tools
             if (hash1.Count > 0)
             {
                 decimal cc = (decimal)((float)count * 100 / hash1.Count);
+                p = decimal.Round(cc, 2);
+            }
+            return p;
+        }
+         
+        public static decimal getLike2(String body1, String body2)
+        {
+
+            String[] keys1 = Regex.Split(body1, "[^\\u0080-\\uFFFF\\w\\-\\d]+");
+            String[] keys2 = Regex.Split(body2, "[^\\u0080-\\uFFFF\\w\\-\\d]+");
+
+            decimal p = 0;
+            if (keys1.Length > 0)
+            {
+                decimal cc = (decimal)((float)keys2.Length * 100 / keys1.Length);
                 p = decimal.Round(cc, 2);
             }
             return p;
@@ -926,7 +1127,7 @@ namespace tools
 
                 }
             }
-            catch (Exception e)
+            catch
             {
                 SysLog("截取字符发生异常！Tools.substr");
             }
@@ -962,62 +1163,11 @@ namespace tools
             return url;
         }
 
-        public static int caseDBTypeInt(String dbname)
-        {
-            if ("Access".Equals(dbname))
-            {
-
-                return 1;
-            }
-            else if ("MySQL".Equals(dbname))
-            {
-
-                return 2;
-            }
-            else if ("SQLServer".Equals(dbname))
-            {
-
-                return 3;
-            }
-            else if ("Oracle".Equals(dbname))
-            {
-
-                return 4;
-            }
-
-            else {
-                return 0;
-            }
-        }
-
         public static DBType caseDBType(String dbname)
         {
-
-            if ("Access".Equals(dbname))
-            {
-
-                return DBType.Access;
-            }
-            else if ("MySQL".Equals(dbname))
-            {
-
-                return DBType.MySQL;
-            }
-            else if ("SQLServer".Equals(dbname))
-            {
-
-                return DBType.SQLServer;
-            }
-            else if ("Oracle".Equals(dbname))
-            {
-
-                return DBType.Oracle;
-            }
-
-            else
-            {
-                return 0;
-            }
+                DBType db= DBType.UnKnow;
+                Enum.TryParse(dbname, out db);
+                return db;
         }
 
         public static String getRequestURI(String header)
@@ -1053,5 +1203,217 @@ namespace tools
             return uri;
         }
 
+        //DB2的每列是数字或者字符的穷举
+        private static String[] DB2_fillStr = { "1", "chr(32)"};
+
+
+        private static String[] Infomix_fillStr = { "1", "''" };
+
+
+       
+        // 获得DB2的每列是数字或者字符的穷举
+ 
+        public static List<String> getDB2UnionTemplates(int sumCount, int showIndex)
+        {
+            return getUnionTemplates(DB2_fillStr, sumCount, showIndex);
+        }
+        // 获得informix的每列是数字或者字符的穷举
+        public static List<String> getInformixUnionTemplates(int sumCount, int showIndex)
+        {
+            return getUnionTemplates(Infomix_fillStr, sumCount, showIndex);
+        }
+
+        // 获得数据库的每列是数字或者字符的穷举
+        private static List<String> getUnionTemplates(String[] fillStr,int sumCount, int showIndex)
+        {
+            List < String > list= new List<String>();
+            if (sumCount == 1)
+            {
+                list.Add("{data}");
+               
+            }
+            else {
+                int n = sumCount - 1;
+                String[] codes = new String[2 << (n - 1)];
+                createGrayCode(fillStr,codes, n);
+                foreach(String code in codes)
+                {
+                    String cp = insertShowTemplate(code, showIndex);
+                    list.Add(cp);
+                    //插入,显示列
+                }
+            }
+            return list;
+        }
+
+        private static String insertShowTemplate(String temlate,int showIndex) {
+            List<String> list = new List<String>(temlate.Split(','));
+            list.Insert(showIndex,"{data}");
+            return String.Join(",", list);
+
+        }
+
+        private static void createGrayCode(String[] fillStr, String[] codes, int n)
+        {
+            if (n == 1)
+            {
+                codes[0] = fillStr[0];
+                codes[1] = fillStr[1];
+            }
+            else
+            {
+                createGrayCode(fillStr,codes, n - 1);
+                int len = 2 << (n - 1);
+                int half = len >> 1;
+                for (int i = len - 1, j = 0; i >= 0; i--)
+                {
+                    if (i < half)
+                    {
+                        codes[i] = fillStr[0] + "," + codes[--j];
+                    }
+                    else
+                    {
+                        codes[i] = fillStr[1] + "," + codes[j++];
+                    }
+                }
+            }
+        }
+
+        public static List<String> GetSQLiteColumns(String sql)
+        {
+            List<String> list = new List<String>(); 
+            MatchCollection mc =Regex.Matches(sql, "\"(?<column>\\w+)\"[\\w ]+\\,");
+            if (mc!=null&&mc.Count > 0) {
+                foreach (Match m in mc) {
+                    list.Add(m.Groups["column"].Value);
+                }
+
+            }
+            return list;
+        }
+
+        public static int getMax(List<int> nums) {
+            if (nums.Count > 0) {
+                nums.Sort();
+                return nums[nums.Count-1];
+            }
+            
+           
+            return 0;
+        }
+
+        public static int getMaxSecondByMillisecond(int longMillisecond)
+        {
+            double c = longMillisecond / (double)1000;
+            return (int)(Math.Ceiling(c));
+        }
+
+
+        public static String getUnionStartStrByBoolSleep(String payload)
+        {
+            String[] sstr ={"and","or"};
+            int index = 0;
+            foreach (String str in sstr) {
+                index=payload.ToLower().IndexOf(str);
+                if (index != -1) {
+                    break;
+                }
+            }
+            if (index != -1) {
+                payload.Substring(0, index);
+            }
+            return "";
+        }
+
+        /**
+         * 获取系统相关唯一ID,用于统计
+         */
+        public static String getSystemSid()
+        {
+
+            String sid = "";
+            try
+            {
+                //获得系统名称
+                RegistryKey rk = Registry.LocalMachine.OpenSubKey("Software\\Microsoft\\Windows NT\\CurrentVersion");
+                sid = rk.GetValue("ProductName").ToString();
+                rk.Close();
+                //获得系统唯一号，系统安装id和mac组合
+                sid += "_";
+
+                var officeSoftware = new ManagementObjectSearcher("SELECT ID, ApplicationId, PartialProductKey, LicenseIsAddon, Description, Name, OfflineInstallationId FROM SoftwareLicensingProduct where PartialProductKey <> null");
+                var result = officeSoftware.Get();
+                foreach (var item in result)
+                {
+                    String c = item.GetPropertyValue("name").ToString();
+
+                    if (item.GetPropertyValue("name").ToString().StartsWith("Windows"))
+                    {
+
+                        sid += item.GetPropertyValue("OfflineInstallationId").ToString() + "_";
+                        break;
+                    }
+                }
+
+            }
+            catch
+            {
+                sid += "ex_";
+            }
+            String mac = "";
+            try
+            {
+                NetworkInterface[] fNetworkInterfaces = NetworkInterface.GetAllNetworkInterfaces();
+                foreach (NetworkInterface adapter in fNetworkInterfaces)
+                {
+                    String fCardType = "o";
+                    String fRegistryKey = "SYSTEM\\CurrentControlSet\\Control\\Network\\{4D36E972-E325-11CE-BFC1-08002BE10318}\\" + adapter.Id + "\\Connection";
+                    RegistryKey rk = Registry.LocalMachine.OpenSubKey(fRegistryKey, false);
+                    if (rk != null)
+                    {
+                        String fPnpInstanceID = rk.GetValue("PnpInstanceID", "").ToString();
+                        int fMediaSubType = Convert.ToInt32(rk.GetValue("MediaSubType", 0));
+                        if (!String.IsNullOrEmpty(fPnpInstanceID) && fPnpInstanceID.StartsWith("PCI"))
+                        {
+                            if (fMediaSubType == 2)
+                            {
+                                fCardType = "w";
+                            }
+                            else
+                            {
+                                fCardType = "n";
+                            }
+                            mac = fCardType + ":" + adapter.GetPhysicalAddress().ToString() + "--";
+                        }
+                    }
+                }
+                if (mac.EndsWith("--"))
+                {
+                    mac = mac.Substring(0, mac.Length - 2);
+                }
+            }
+            catch
+            {
+            }
+            return sid + mac;
+            
+
+        }
+
+
+        public static int FindItemWithIgnoreCase(List<String> list, String items) {
+            int index = -1;
+            foreach (String str in list) {
+                index++;
+                if (str.Equals(items, StringComparison.OrdinalIgnoreCase)){
+                    break;
+                }
+            }
+            return index;
+        }
+
+        
     }
+
+
 }

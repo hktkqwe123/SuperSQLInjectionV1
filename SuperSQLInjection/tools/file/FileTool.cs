@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using System.IO;
+using SuperSQLInjection.model;
 
 namespace tools
 {
@@ -137,7 +138,7 @@ namespace tools
             
         }
         //读取文件
-        public static Byte[] readFileToByte(String path,int a)
+        public static Byte[] readFileToByte(String path,Encoding encode)
         {
             Byte[] buffer = null;
             FileStream fs_dir=null;
@@ -145,7 +146,7 @@ namespace tools
             try
             {
                 fs_dir = new FileStream(path, FileMode.Open, FileAccess.Read);
-                BinaryReader br = new BinaryReader(fs_dir);
+                BinaryReader br = new BinaryReader(fs_dir, encode);
                 int len = (int)fs_dir.Length;
 
                 buffer = new byte[len];
@@ -189,11 +190,6 @@ namespace tools
                     sw = new StreamWriter(fs_dir);
 
                     sw.WriteLine(log);
-
-                    sw.Close();
-
-                    fs_dir.Close();
-
                 }
                 catch (Exception e)
                 {
@@ -213,5 +209,137 @@ namespace tools
             }
 
         }
+        /// <summary>
+        /// 注意：vals为空或null会清空代理
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="vals"></param>
+        public static void SaveProxyList(String path, Dictionary<String,Proxy>.ValueCollection vals)
+        {
+     
+            FileStream fs_dir = null;
+            StreamWriter sw = null;
+            try
+            {
+                if (vals != null && vals.Count > 0)
+                {
+                    fs_dir = new FileStream(path, FileMode.Create, FileAccess.Write);
+                    sw = new StreamWriter(fs_dir, Encoding.UTF8);
+                    String head = "域名或IP,代理端口,代理类型,代理账号,代理密码,是否可用,用时(毫秒),验证时间(毫秒)";
+                    sw.WriteLine(head);
+                    foreach (Proxy proxy in vals)
+                    {
+                        String line = proxy.host + "," + proxy.port + "," + proxy.proxyType + "," + proxy.username + "," + proxy.password + "," + proxy.isOk + "," + proxy.useTime + "," + proxy.checkTime;
+                        sw.WriteLine(line);
+                    }
+                }
+                else {
+                    //如果为空，则删除代理
+                    File.Delete(path);
+                }
+            }
+            catch (Exception e)
+            {
+                Tools.SysLog("保存代理池发生异常！" + e.Message);
+            }
+            finally
+            {
+                if (sw != null)
+                {
+                    sw.Close();
+                }
+                if (fs_dir != null)
+                {
+                    fs_dir.Close();
+                }
+            }
+
+        }
+
+        public static Dictionary<String,Proxy> ReadProxyList(String path)
+        {
+
+            Dictionary<String, Proxy> list = new Dictionary<String, Proxy>();
+            FileStream fs_dir = null;
+            StreamReader reader = null;
+            try
+            {
+                fs_dir = new FileStream(path, FileMode.Open, FileAccess.Read);
+
+                reader = new StreamReader(fs_dir);
+
+                String lineStr;
+                int line = 0;
+                while ((lineStr = reader.ReadLine()) != null)
+                {
+                    line++;
+                    if (line == 1) {
+                        continue;
+                    }
+                    
+                    if (!lineStr.Equals(""))
+                    {
+                        String[] strs = lineStr.Split(',');
+                        if (strs.Length == 2)
+                        {
+                            Proxy proxy = new Proxy();
+                            proxy.host = strs[0];
+                            proxy.port = Tools.convertToInt(strs[1]);
+                            list.Add(proxy.host + proxy.port, proxy);
+                        }
+                        else if (strs.Length == 3)
+                        {
+                            Proxy proxy = new Proxy();
+                            proxy.host = strs[0];
+                            proxy.port = Tools.convertToInt(strs[1]);
+                            proxy.proxyType = strs[2];
+                            list.Add(proxy.host + proxy.port, proxy);
+                        }
+                        else if (strs.Length == 5)
+                        {
+                                Proxy proxy = new Proxy();
+                                proxy.host = strs[0];
+                                proxy.port = Tools.convertToInt(strs[1]);
+                                proxy.proxyType = strs[2];
+                                proxy.username = strs[3];
+                                proxy.password = strs[4];
+                                list.Add(proxy.host + proxy.port, proxy);
+                        }
+                        else if (strs.Length == 8)
+                        {
+                            Proxy proxy = new Proxy();
+                            proxy.host = strs[0];
+                            proxy.port = Tools.convertToInt(strs[1]);
+                            proxy.proxyType = strs[2];
+                            proxy.username = strs[3];
+                            proxy.password = strs[4];
+                            proxy.isOk = strs[5];
+                            proxy.useTime = Tools.convertToInt(strs[6]);
+                            proxy.checkTime = strs[7];
+                            list.Add(proxy.host + proxy.port, proxy);
+                        }
+                    }
+                   
+                }
+            }
+            catch (Exception e)
+            {
+                Tools.SysLog("ReadProxyList异常："+e.Message);
+            }
+            finally
+            {
+                if (reader != null)
+                {
+                    reader.Close();
+                }
+                if (fs_dir != null)
+                {
+                    fs_dir.Close();
+                }
+            }
+            return list;
+        }
+
+
     }
 }

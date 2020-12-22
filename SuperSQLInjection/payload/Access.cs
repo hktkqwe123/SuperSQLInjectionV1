@@ -6,8 +6,9 @@ namespace SuperSQLInjection.payload
 {
     class Access
     {
+        public static List<String> vers = null;
         //获取数据条数
-        public static String data_count = "(select count(*) from {table})";
+        public static String data_count = "(select count(1) from {table})";
  
         //判断条数
         public static String bool_datas_count = " " + data_count + ">={len}";

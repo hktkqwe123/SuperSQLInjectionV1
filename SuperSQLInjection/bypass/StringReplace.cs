@@ -11,17 +11,32 @@ namespace SuperSQLInjection.bypass
 {
     class StringReplace
     {
-        public static String strReplaceCenter(Config config, String request, Hashtable replaceList)
+        public static String lastRand = "";
+        public static String lastpayload = "";
+        public static String strReplaceCenter(Config config, String request, Hashtable replaceList,String payload)
         {
             //修改随机值
-            request = Regex.Replace(request, "(\\<Rand\\>[.\\s\\S]*?\\<\\/Rand\\>)", System.Guid.NewGuid().ToString("N"));
+            String rand = "";
+            if (payload.Equals(lastpayload)) {
+                rand = lastRand;
+            }
+            else {
+               rand = System.Guid.NewGuid().ToString("N");
+            }
+           
+            if (payload.Equals("请求二次注入页面")) {
+                rand = lastRand;
+            }
+            request = Regex.Replace(request, "(\\<Rand\\>[.\\s\\S]*?\\<\\/Rand\\>)", rand);
+            lastRand = rand;
+            lastpayload = payload;
             //找到需要处理的字符
             MatchCollection mc = Regex.Matches(request, "(?<=(\\<Encode\\>))[.\\s\\S]*?(?=(\\<\\/Encode\\>))");
             String str="";
             foreach (Match m in mc)
             {
-                 str = m.Value;
-                 
+                str = m.Value;
+                str = bypassUseBetweentAnd(config, str);
                 if (config.reaplaceBeforURLEncode || config.isOpenURLEncoding==false)
                 {
                     //替换字符
@@ -131,7 +146,7 @@ namespace SuperSQLInjection.bypass
                     {
                         String key = ite.Key.ToString();
                         if (!String.IsNullOrEmpty(key)) {
-                            str = str.ToLower().Replace(key, ite.Value + "");
+                            str = str.Replace(key, ite.Value + "");
                         }
                         
                     }
@@ -213,18 +228,85 @@ namespace SuperSQLInjection.bypass
             return sb.ToString();
         }
 
+
+        public static String bypassUseBetweentAnd(Config config,String paylaod) {
+
+            if (config.useBetweenByPass)
+            {
+                
+
+                MatchCollection mc=Regex.Matches(paylaod, @"(?<str>[\>\<\=]+)(?<len>\d+)"); ;
+                if (mc.Count <= 0) {
+                    return paylaod;
+                }
+                int offset = 0;
+                foreach (Match mt in mc)
+                {
+                    String mstr = mt.Groups["str"].Value;
+                    int findex = mt.Index;
+                    String is16 = "";
+                    if (findex!=0&&findex < paylaod.Length- mt.Length- offset) {
+                        is16 = paylaod.Substring(findex + offset, mt.Length + 1);
+                    }
+                    if (is16.Contains("0x"))
+                    {
+                        //判断是否存在16进制情况，有则跳出
+                        continue;
+                    }
+                    else
+                    {
+                        int len = Tools.convertToInt(mt.Groups["len"].Value);
+                      
+                        if (mstr.Contains(">="))
+                        {
+                            String rp = " not between 0 and " + (len - 1);
+                            paylaod =paylaod.Remove(findex+offset, mt.Length).Insert(findex+offset, rp);
+                            offset += rp.Length- mt.Length;
+                        }
+                        else if (mstr.Equals("<="))
+                        {
+                            String rp = " between 0 and " + len;
+                            paylaod =paylaod.Remove(findex, mt.Length).Insert(findex, rp);
+                           
+                        }
+                        else if (mstr.Equals(">"))
+                        {
+                            String rp = " not between 0 and " + len;
+                            paylaod =paylaod.Remove(findex+ offset, mt.Length).Insert(findex+ offset, rp);
+                            offset += rp.Length - mt.Length;
+                        }
+                        else if (mstr.Equals("="))
+                        {
+                            String rp = " between " + len + " and " + len;
+                            paylaod =paylaod.Remove(findex + offset, mt.Length).Insert(findex + offset, rp);
+                            offset += rp.Length - mt.Length;
+                        }
+
+                        else if (mstr.Equals("<"))
+                        {
+                            String rp = " between 0 and " + (len - 1);
+                            paylaod =paylaod.Remove(findex, mt.Length).Insert(findex, rp);
+                            offset += rp.Length - mt.Length;
+                        }
+                    }
+
+                }
+            }
+            return paylaod;
+        }
+   
         public static String toLowerOrUpperCase(String oldStr, String split,int changeType)
         {
 
             StringBuilder sb = new StringBuilder();
             try
             {
-                MatchCollection mc = Regex.Matches(oldStr, "([a-zA-Z_\\.]+|\\@+[a-zA-Z_]+|[a-zA-Z_]\\(\\)+)");
+                MatchCollection mc = Regex.Matches(oldStr, "([a-zA-Z_\\.]+|\\@+[a-zA-Z_]+|[a-zA-Z_]\\(\\)+|\\'[a-zA-Z_\\-]+\\')");
                 foreach (Match m in mc) {
 
                     String keyStr =m.Groups[0].Value;
                     //库名.表,全局变量,环境变量不处理防止部分情况出现错误
-                    if (keyStr.IndexOf(".") != -1||keyStr.IndexOf("@") != -1 || keyStr.IndexOf("()") != -1) {
+                    if (keyStr.IndexOf("'") != -1||keyStr.IndexOf(".") != -1||keyStr.IndexOf("@") != -1 || keyStr.IndexOf("()") != -1) {
                         continue;
                     }
                     if (changeType == 1) {

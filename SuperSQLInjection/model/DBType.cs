@@ -11,6 +11,10 @@ namespace SuperSQLInjection.model
         Access=1,  
         MySQL = 2,
         SQLServer = 3,
-        Oracle = 4
+        Oracle = 4,
+        PostgreSQL=5,
+        DB2 = 6,
+        SQLite=7,
+        Informix=8
     }
 }
